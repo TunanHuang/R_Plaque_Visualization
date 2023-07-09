@@ -1,0 +1,390 @@
+---
+title: "INST0065 Assessment 2"
+author: "Leslie"
+date: "02/05/2023"
+output: html_document
+
+csl: 'https://raw.githubusercontent.com/citation-style-language/styles/master/apa-6th-edition.csl'
+
+references:
+  
+- id: openplaques2023
+  title: openplaques.org database
+  author:
+  - literal: openplaques.org
+  URL: 'https://openplaques.org/data/'
+  type: webpage
+  issued:
+    year: 2023
+
+- id: theblueplaque
+  title: The Blue Plaque:Co-creating Design Fictions in the Wild
+  author:
+    - family: Mel
+      given: Woods
+  URL: 'https://figshare.com/articles/journal_contribution/RTD2015_30_The_Blue_Plaque_Co-Creating_Design_Fictions_in_the_Wild/1328000'
+  issued:
+    year: 2015
+
+- id: archaeologyopendata
+  title: How community archaeology can make use of open data to achieve further its objectives
+  author:
+    - family: Nicole
+      given: Beale
+  URL: 'https://www.tandfonline.com/doi/abs/10.1080/00438243.2012.743252'
+  issued:
+    year: 2012
+  container-title: World Archaeology
+  volume: 44
+  issue: 4
+  page: 612-633
+  publisher: Routledge
+
+---
+Your student number:22076842
+
+Module code and title:INST0065: Data Visualization and GIS 22/23
+
+Module tutor's name:Dr Oliver Duke-Williams
+
+The title of the work:Data Visualization Project: Explore the Gender Patterns Behind Plaques
+
+Electronic word count:1980
+
+# Introduction
+
+Blue heritage plaques pepper the UK landscape expounding officially validated narratives celebrating past events, people, and buildings.They support concise, easily accessible stories of significant past achievements in the present[@theblueplaque]. However, despite their widespread presence and impact on public memory, these plaques have been criticized for perpetuating a narrow and often gendered representation of history.
+In this assignment, I aim to explore the gender narratives behind plaques by analyzing the data of male and female subjects across different categories and time periods. 
+
+The data used in this project is from Open Plaques[@openplaques2023], which is a community-based project that seeks to document and promote commemorative plaques and historical markers. The project makes data available openly and provides mechanisms for improving those data by means of comments on individual records[@archaeologyopendata]. 
+
+
+# Methods
+
+**Preprocess**
+
+Before proceeding to data visualization, there are some necessary preparations that need to be done. For example, I set several options for code chunks to make the final output cleaner and more focused on the main content, load the necessary packages, read in the plaque data from the CSV file, and select a subset of variables that will be used for visualization, saving them in plaques_subset dataframe. 
+```{r setup, include=FALSE}
+#Set several options for the R Markdown document. 
+knitr::opts_chunk$set(echo = FALSE,eval = TRUE,warning = FALSE,comment = NA,message = FALSE)
+```
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+# Load data
+plaques <- read_csv("open-plaques-gb-2021-05-14.csv")
+```
+
+```{r}
+# Select all the variables that will be used in visualization 
+plaques_subset <- plaques %>%
+  arrange(erected) %>%
+  select(latitude, longitude, area, erected, 
+         number_of_male_subjects, number_of_female_subjects, 
+         lead_subject_sex, lead_subject_born_in, lead_subject_died_in, 
+         lead_subject_primary_role)
+```
+
+
+**Visualization One **
+
+In the first visualization, I plan to investigate how the number of plaques for male and female subjects, have changed over time. In this process, I filtered the data to include only plaques erected after 1800 because the data before that is too few to reflect the patterns of the era and contain obvious errors that could be disruptive to the analysis. (for example, there are erected years recorded as ‘1’). Also, for the convenience of plotting, I divided the erected data into ten-year intervals using floor(erected/10)*10). Then, the data were grouped and summarized by decade. Also, I used pivot_longer() function to change the data format, allowing for easier visualization, and the mutate() function to rename the variables. The process of getting lead subject data is similar, apart from I used the count() function to compute the number of plaques by decade and lead subject sex. 
+
+In the visualization process, ggplot was used to create a composite chart that includes both a bar chart and a line chart to display the data for subjects and lead subjects. The use of two colours, orange and purple, allows for easy differentiation between male and female data. 
+```{r}
+# Create a dataframe containing the number of male and female subjects for each decade
+
+number_of_subjects_data <- plaques_subset %>% 
+  select(erected,number_of_male_subjects,number_of_female_subjects) %>% 
+  filter(erected>1800) %>% 
+  group_by(decade = floor(erected/10)*10) %>% 
+  summarise_at(.vars = vars(number_of_male_subjects,number_of_female_subjects),
+               .funs = sum) %>% 
+  pivot_longer(cols = -decade) %>% 
+  mutate(name = case_when(
+    name=='number_of_male_subjects' ~ 'Male',
+    name=='number_of_female_subjects' ~ 'Female'))
+
+# Create a dataframe containing the number of male and female lead subjects for each decade
+lead_subject_sex_data <- plaques_subset %>% 
+  select(erected,lead_subject_sex) %>% 
+  filter(erected>1800,
+         lead_subject_sex!='object') %>% 
+  group_by(decade = floor(erected/10)*10) %>% 
+  count(decade,lead_subject_sex) %>% 
+  mutate(lead_subject_sex = case_when(
+    lead_subject_sex=='male' ~ 'Male',
+    lead_subject_sex=='female' ~ 'Female'))
+```
+
+
+```{r}
+#Plot a composite chart 
+p1 <- ggplot() +
+  geom_bar(data = number_of_subjects_data,
+           mapping = aes(x = decade,y = value,fill = name),
+           stat = 'identity',
+           position = 'dodge',
+           alpha = 0.6) +
+  geom_line(data = lead_subject_sex_data,
+           mapping = aes(x = decade,y = n,color = lead_subject_sex)) +
+  scale_fill_manual(values = c('Female' = 'orange','Male' = 'purple')) +
+  scale_color_manual(values = c('Female' = 'orange','Male' = 'purple')) +
+  labs(x = 'Decade',
+       y = 'Number of Subjects',
+       fill = 'Sex',
+       color = 'Sex',
+       title = 'Changes in Number of Male and Female Subjects&Lead Subject over Time\n(Bar Chart: Subject & Line Chart: Lead Subject)' ) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p1
+#plotly::ggplotly(p1)
+```
+
+**Visualization Two **
+
+Next, I tried to explore the distribution of the roles of commemorated individuals across genders and time periods. I first selected ten of the most frequently occurring roles for males and females respectively using the slice_max() function and focused on them instead of including all roles in the following process. I did this selection because there are more than one thousand roles involved in the data, making it difficult to visualize and identify patterns. Then I used the right_join() function to keep only the rows that contain those top roles and then counted the number of occurrences of each role in each decade and gender. 
+After getting the needed data, I made a scatter plot to show the distribution of lead subject primary roles across time, grouped by gender. The bubble size represents the number of plaques with that specific combination of decade and role, and the colour distinguishes between male and female subjects. Additionally, plotly::ggplotly is used to convert the ggplot chart to a plotly chart, which allows users to hover over data points to see more detailed information, pan and zoom to focus on specific areas of the graph. I add this because the size of the bubble may not accurately reflect subtle differences. 
+
+```{r}
+#Find the top 10 most frequent primary roles for female and male 
+top_role = plaques_subset %>% 
+  count(lead_subject_sex,lead_subject_primary_role) %>% 
+  filter(lead_subject_sex!='object') %>% 
+  drop_na() %>% 
+  group_by(lead_subject_sex) %>% 
+  slice_max(order_by = n,n = 10)
+```
+
+
+```{r}
+#Generate a scatter plot showing the top 10 most frequent roles for both male and female in different decades
+
+p3<-plaques_subset %>% 
+  select(erected,lead_subject_primary_role,lead_subject_sex) %>% 
+  filter(erected>1800,
+         lead_subject_sex!='object') %>% 
+  mutate(decade = floor(erected/10)*10) %>% 
+  right_join(top_role,by = c('lead_subject_sex','lead_subject_primary_role')) %>% 
+  
+  count(decade,lead_subject_sex,lead_subject_primary_role) %>% 
+  mutate(lead_subject_sex = case_when(
+    lead_subject_sex=='male' ~ 'Male',
+    lead_subject_sex=='female' ~ 'Female')) %>% 
+  
+  ggplot(aes(x = decade,y = lead_subject_primary_role,size = n,color = lead_subject_sex)) +
+  geom_point(alpha = 0.9) +
+  facet_wrap(~lead_subject_sex,scales = 'free_y',nrow = 2) +
+  scale_color_manual(values = c('Female' = 'orange','Male' = 'purple')) +
+  labs(x = 'Year',
+       y = 'Lead Subject Roles',
+       size = 'Number of Plaques',
+       title = 'Distribution of Lead Subject Roles over Time') +
+  guides(color = F) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.y = element_text(size = 6),
+        legend.position = 'bottom')
+
+plotly::ggplotly(p3)
+```
+
+**Visualization Three **
+
+The third figure serves as a complement to visualization two. The second figure clearly shows the change in the number of each lead subject role over time, but it is not easy to visually compare the number of different roles within each decade. Therefore, in the third plot, I used a stacked bar chart to show the proportion of different lead subject roles within each decade by setting stat = 'identity', and position = 'fill'. Also, I used scale_fill_brewer() function that sets the colour palette for the fill aesthetic. This function is used to ensure that the fill colours of the bars match across the different roles in the plot, making it easier for viewers to compare the proportions of each role. At the same time, I split the data for males and females into two separate plots, more detailedly displaying the role distribution of each gender in each decade. 
+
+
+
+```{r}
+#Generate a stacked bar plot showing the proportion of top subject roles for female lead subjects over time.
+plaques_subset %>% 
+  select(lead_subject_primary_role,lead_subject_sex,erected) %>% 
+  filter(lead_subject_sex!='object') %>% 
+  right_join(top_role %>% filter(lead_subject_sex=='female') %>% slice_max(order_by = n,n = 10),
+             by = c('lead_subject_sex','lead_subject_primary_role')) %>% 
+  filter(lead_subject_sex=='female') %>% 
+  mutate(decade = floor(erected/10)*10) %>%
+  count(decade,lead_subject_primary_role) %>% 
+  ggplot(aes(x = decade,y = n,fill = lead_subject_primary_role)) +
+  geom_bar(stat = 'identity',position = 'fill') +
+  scale_fill_brewer(palette = 'Paired') +
+  labs(x = 'Decade', 
+       y = 'Proportion',
+       fill = 'Subject Roles',
+       title = 'Distribution of Lead Subject Roles over time (Female Plaques)') +
+  guides(color = F) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        legend.position = 'bottom')
+```
+
+```{r}
+#Generate a stacked bar plot showing the proportion of top subject roles for male lead subjects over time.
+plaques_subset %>% 
+  select(lead_subject_primary_role,lead_subject_sex,erected) %>% 
+  filter(lead_subject_sex!='object') %>% 
+  right_join(top_role %>% filter(lead_subject_sex=='male') %>% slice_max(order_by = n,n = 10),
+             by = c('lead_subject_sex','lead_subject_primary_role')) %>% 
+  filter(lead_subject_sex=='male') %>% 
+  mutate(decade = floor(erected/10)*10) %>%
+  count(decade,lead_subject_primary_role) %>% 
+  ggplot(aes(x = decade,y = n,fill = lead_subject_primary_role)) +
+  geom_bar(stat = 'identity',position = 'fill') +
+  scale_fill_brewer(palette = 'Paired') +
+  labs(x = 'Decade',
+       y = 'Proportion',
+       fill = 'Subject Roles',
+       title = 'Distribution of Lead Subject Roles over time (Male Plaques)') +
+  guides(color = F) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5),
+        legend.position = 'bottom')
+```
+
+
+
+**Visualization Four ** 
+
+In this last figure, I aimed to explore whether the number of plaques, is related to the position in which they are located. To achieve this, I created a geographical plot of the distribution of plaques in the UK. Firstly, I used ‘uk_map = map_data (map = 'world', region = 'UK')’ to retrieve the geographical data of the world map and select only the data for the UK region, storing them in the uk_map dataframe. Then, I used the filter() function to select only the plaques that fall within the geographical bounds of the UK. This was done by comparing the plaque’s longitude and latitude values with the minimum and maximum values of the longitude and latitude in the uk_map data. 
+
+In the visualization process, I used geom_polygon() to draw the UK map using the uk_map data, setting the fill colour of the map to light grey and the outline colour to black. Then, I used geom_point() to plot the plaque data onto the map. The plaque’s longitude and latitude values are plotted on the x and y axes, respectively, and the colour of the point is determined by the plaque’s lead subject sex. I manually set the points to orange for the female and purple for the male. 
+
+
+
+
+```{r}
+#install.packages("maps")
+#install.packages("mapproj")
+```
+
+
+```{r}
+#Filters the plaques_subset dataset to only include entries with longitude and latitude within the bounds of the UK map
+
+uk_map = map_data(map = 'world',region = 'UK')
+map_data = plaques_subset %>%
+  filter(longitude>=min(uk_map$long),
+         longitude<=max(uk_map$long),
+         latitude>=min(uk_map$lat),
+         latitude<=max(uk_map$lat),
+         lead_subject_sex!='object') %>%
+  mutate(lead_subject_sex = case_when(
+    lead_subject_sex=='male' ~ 'Male',
+    lead_subject_sex=='female' ~ 'Female'))
+```
+
+```{r}
+#Create a map of the UK with the distribution of plaques by sex
+ggplot() +
+  geom_polygon(data = uk_map,
+               mapping = aes(x = long,y = lat,group = group),
+               fill = 'lightgrey',
+               color = 'black') +
+  geom_point(data = map_data,
+             mapping = aes(x = longitude,
+                           y = latitude,
+                           color = lead_subject_sex),
+             alpha = 0.5,
+             size = 0.5) +
+  facet_wrap(~lead_subject_sex) +
+  coord_map() +
+  scale_color_manual(values = c('Female' = 'orange','Male' = 'purple')) +
+  labs(x = 'Longitude',
+       y = 'Latitude',
+       title = 'Plaques Distribution in the UK by Sex') +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = 'none')
+```
+
+
+
+
+# Results
+
+From the early 19th century to the early 21st century, there has always been a significant gap in the number of male and female plaques, both in terms of the subjects included in the plaque and the lead subject. As seen from Visualization One, the number of male plaques has been growing rapidly each year since 1950, with the number of male lead subjects increasing more than tenfold from 96 in 1960 to 967 in 2010, while the growth of female plaques has been much slower. In the year with the highest number of plaques, which was 2010, the number of plaques with female lead subject was only 236. This disparity in the number of male and female plaques to some extend reflects that women's value and contributions have not been given the same level of recognition as men. In other words, faced with structural and cultural barriers that have historically held women back, women may not have had the same opportunities and environment as men to attain the kinds of accomplishments that lead to recognition.  Further confirmation of this can be found in the distribution of roles. 
+
+As shown in visualization two and three, roles such as writer, author, poet, and actor have a relatively even gender distribution, taking up high proportion in both sexes. However, some professions show great gender difference, such as architect, engineer, Fellow of the Royal Society, and Member of Parliament. The number of men with these roles is much higher than that of women. Conversely, there are some roles that are predominantly female, such as nurse and singer. These differences can be explained by historical and systemic biases, as well as traditional gender roles and social expectations. 
+
+From the temporal perspective, from 1800 to 1950, roles related to literature such as poets, novelists, and writers were highly represented by both men and women. However, after 1950, other professions such as actors, engineers, and architects grew at a faster rate and even surpassed the growth of the earlier professions. This is closely related to the stage of social and economic development. 
+
+It also deserves mentioning that Suffragettes and Suffragists are among the top ten roles for women. If having a detailed look, we can find the time period in which these women lived, it is mostly in the second half of the 19th century and into the 20th century, and the years of the plaques' erection are concentrated in the 20th and 21st centuries. This is consistent with the rise and development of the modern feminist movement, reflecting the awakening of female consciousness and the beginning of women's struggle for their rightful rights. Feminists and women's rights activists began to be regarded as worthy of commemoration.
+
+Finally, from the geographical plot of the distribution of plaques in the UK, once again we can visually see the difference in the number of male and female plaques: the density of male plaques is clearly much higher than that of female plaques. 
+At the same time, the density of plaques in the south and central regions of the UK is relatively high, while the density is low in Scotland. Also, the density is higher in large cities such as London, Birmingham, and Manchester. However, the map does not show a significant regional gender difference, in other words, there is not a strong correlation between the region and lead subject sex.
+
+
+
+# Conclusion
+
+In conclusion, the Open Plaques data provides us with a valuable window into the social preferences and cognitive evaluations that underlie the historical markers in the UK. The gender disparity of opaque number indicates a gender bias in the representation of historical figures. And the difference in the roles attributed to male and female subjects also reveals how the traditional gender roles and stereotypes have influenced the selection of individuals to be commemorated in the public sphere. 
+However, as women's status continues to rise and gender consciousness awakens, I am willing to see women participate in the public sphere in more diverse roles, truly be seen, and gain respect and recognition for their achievement. 
+
+Lastly, there are another idea I would like to implement and improve if given more time. In visualization two and three, I adopted the erected time as the time variable to analyze role distribution for I hope to see the social value and expectations of those erection eras. To be specific, what kind of people they deem worthy of being remembered and celebrated during that time period. However, I also want to make a change by looking at the timeline of these commemorated individuals, which can reveal the gender-based division of roles during their lifetime. This thought can be achieved because there are two variables that show the born and death year of lead subjects, but I am not sure how to show the lifespan clearly. Since every person has their own lifeline and there is overlap in time, it is difficult to prevent these lines from overlapping in the graph, and it is also difficult to distinguish the beginning and end of the lines. The following is a chart I attempted to create, but it doesn't effectively convey the information, so I need to explore more in the future. 
+
+
+```{r}
+#Generate the timeline of people from top 5 lead subject roles of female
+plaques_subset %>% 
+  select(lead_subject_primary_role,lead_subject_sex,lead_subject_born_in,lead_subject_died_in) %>% 
+  filter(lead_subject_sex!='object') %>% 
+  right_join(top_role %>% filter(lead_subject_sex=='female') %>% slice_max(order_by = n,n = 5),
+             by = c('lead_subject_sex','lead_subject_primary_role')) %>% 
+  filter(lead_subject_sex=='female') %>% 
+  drop_na() %>% 
+  ggplot(aes(xmin = lead_subject_born_in,
+             xmax = lead_subject_died_in,
+             y = lead_subject_primary_role,
+             color = lead_subject_primary_role)) +
+  geom_errorbar(alpha = 0.5,width = 0.1) +
+  scale_color_brewer(palette = 'Dark2') +
+  labs(x = 'Year',
+       y = 'Lead Subject Roles',
+       color = NULL,
+       title = 'The Timeline of Subjects from Top Roles(Female plaque)'
+       ) +
+  guides(color = F) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+```
+
+```{r}
+#Generate the timeline of people from top 5 lead subject roles of male
+plaques_subset %>% 
+  select(lead_subject_primary_role,lead_subject_sex,lead_subject_born_in,lead_subject_died_in) %>% 
+  filter(lead_subject_sex!='object') %>% 
+  right_join(top_role %>% filter(lead_subject_sex=='male') %>% slice_max(order_by = n,n = 5),
+             by = c('lead_subject_sex','lead_subject_primary_role')) %>% 
+  filter(lead_subject_sex=='male') %>% 
+  drop_na() %>% 
+  ggplot(aes(xmin = lead_subject_born_in,
+             xmax = lead_subject_died_in,
+             y = lead_subject_primary_role,
+             color = lead_subject_primary_role)) +
+  geom_errorbar(alpha = 0.5,width = 0.1) +
+  scale_color_brewer(palette = 'Dark2') +
+  labs(x = 'Year',
+       y = 'Lead Subject Roles',
+       color = NULL,
+       title = 'The Timeline of Subjects from Top Roles(Male plaque)'
+       ) +
+  guides(color = F) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+```
+
+
+# Bibliography
+
+
+
+    
+
